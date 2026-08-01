@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Universal Link Shortener · Meson Systematics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:    #f4f5f9;
+  --white: #ffffff;
+  --ink:   #1a1730;
+  --ink2:  #3d3a55;
+  --muted: #8e8ba8;
+  --border:rgba(80,70,140,0.1);
+  --shadow:0 2px 14px rgba(60,50,120,0.06);
+
+  --j-c:#7c3aed; --j-l:#ede9fe; --j-m:rgba(124,58,237,0.15); --j-g:rgba(124,58,237,0.25);
+  --g-c:#0d9488; --g-l:#ccfbf1; --g-m:rgba(13,148,136,0.13); --g-g:rgba(13,148,136,0.25);
+  --l-c:#ea580c; --l-l:#ffedd5; --l-m:rgba(234,88,12,0.12);  --l-g:rgba(234,88,12,0.25);
+  --b1-c:#2563eb;--b1-l:#dbeafe;--b1-m:rgba(37,99,235,0.12); --b1-g:rgba(37,99,235,0.25);
+  --b2-c:#db2777;--b2-l:#fce7f3;--b2-m:rgba(219,39,119,0.12);--b2-g:rgba(219,39,119,0.25);
+}
+
+html, body {
+  width: 100%; min-height: 100vh;
+  background: var(--bg); color: var(--ink);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  overflow-x: hidden; cursor: none;
+}
+
+/* cursor */
+#cursor {
+  position:fixed;top:0;left:0;width:10px;height:10px;
+  background:#7c3aed;border-radius:50%;
+  pointer-events:none;z-index:9999;transform:translate(-50%,-50%);
+  transition:width .15s,height .15s,background .2s;mix-blend-mode:multiply;
+}
+#cursor-ring {
+  position:fixed;top:0;left:0;width:32px;height:32px;
+  border:1.5px solid rgba(124,58,237,0.3);border-radius:50%;
+  pointer-events:none;z-index:9998;transform:translate(-50%,-50%);
+  transition:width .2s,height .2s,border-color .2s;
+}
+
+/* grain */
+body::before {
+  content:'';position:fixed;inset:0;opacity:.025;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* layout */
+.page {
+  position:relative;z-index:1;
+  max-width:980px;margin:0 auto;
+  padding:0 1.6rem 4rem;
+}
+
+/* header */
+header {
+  padding:2.4rem 0 2rem;
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:1rem;flex-wrap:wrap;
+}
+.hd-eyebrow {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.6rem;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:.5rem;
+}
+.hd-title {
+  font-size:1.8rem;font-weight:800;letter-spacing:-.02em;
+}
+.hd-title em {
+  font-style:normal;
+  background:linear-gradient(120deg,var(--j-c),var(--b1-c),var(--g-c));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hd-sub {
+  font-family:'JetBrains Mono',monospace;font-size:.67rem;
+  color:var(--muted);margin-top:.4rem;
+}
+.gear-btn {
+  display:inline-flex;align-items:center;gap:.5rem;
+  font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  padding:.62rem 1.2rem;border-radius:10px;
+  border:1.5px solid var(--border);background:var(--white);
+  color:var(--ink2);cursor:none;box-shadow:var(--shadow);
+  transition:border-color .2s,box-shadow .2s,transform .2s;
+}
+.gear-btn:hover { border-color:rgba(124,58,237,0.3);transform:translateY(-1px);box-shadow:0 4px 18px rgba(60,50,120,0.1); }
+
+/* section row labels */
+.row-label {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:.9rem;margin-top:2rem;
+  display:flex;align-items:center;gap:.7rem;
+}
+.row-label::after { content:'';flex:1;height:1px;background:var(--border); }
+
+/* grid layouts */
+.grid-3 {
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;
+}
+.grid-2 {
+  display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;
+  margin-top:1rem;
+}
+
+@media(max-width:700px){
+  .grid-3,.grid-2 { grid-template-columns:1fr; }
+}
+
+/* ── Service card ── */
+.svc-card {
+  background:var(--white);
+  border-radius:16px;
+  border:1.5px solid var(--border);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+  transition:box-shadow .25s,border-color .25s;
+  display:flex;flex-direction:column;
+}
+
+/* top colour stripe */
+.card-stripe {
+  height:4px;
+  background:var(--c);
+  flex-shrink:0;
+}
+
+/* card header */
+.card-head {
+  padding:.9rem 1.1rem .75rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.6rem;
+}
+.card-icon-wrap {
+  width:32px;height:32px;border-radius:9px;
+  background:var(--cl);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.95rem;flex-shrink:0;
+}
+.card-head-text { flex:1;min-width:0; }
+.card-name { font-size:.82rem;font-weight:800;color:var(--c); }
+.card-tag  {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.57rem;color:var(--muted);margin-top:.05rem;
+}
+
+/* card body = the form area */
+.card-body { padding:1rem 1.1rem; flex:1; display:flex;flex-direction:column;gap:.65rem; }
+
+.inp-wrap { display:flex;flex-direction:column;gap:.32rem; }
+.inp-lbl {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);
+}
+.card-input {
+  width:100%;background:var(--bg);
+  border:1.5px solid var(--border);border-radius:9px;
+  padding:.65rem .9rem;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  color:var(--ink);outline:none;
+  transition:border-color .2s,box-shadow .2s,background .2s;
+}
+.card-input::placeholder { color:var(--muted);opacity:.65; }
+.card-input:focus {
+  border-color:var(--c);background:var(--white);
+  box-shadow:0 0 0 3px var(--cm);
+}
+
+.card-btn {
+  width:100%;
+  background:var(--c);color:#fff;
+  border:none;border-radius:9px;
+  padding:.68rem 1rem;
+  font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:.8rem;font-weight:800;letter-spacing:.04em;
+  cursor:none;
+  box-shadow:0 3px 12px var(--cg);
+  transition:transform .2s,box-shadow .2s,opacity .2s,filter .2s;
+}
+.card-btn:hover:not(:disabled) {
+  transform:translateY(-2px);
+  box-shadow:0 7px 20px var(--cg);
+  filter:brightness(1.08);
+}
+.card-btn:disabled { opacity:.5;transform:none; }
+
+/* result area */
+.card-result {
+  border-radius:9px;background:var(--cl);
+  border:1.5px solid var(--cm);
+  padding:.65rem .9rem;
+  display:none;flex-direction:column;gap:.45rem;
+  animation:rin .28s cubic-bezier(.34,1.56,.64,1) both;
+}
+.card-result.visible { display:flex; }
+.card-result.is-error {
+  background:#fff1f1;border-color:rgba(239,68,68,0.25);
+}
+@keyframes rin { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+
+.res-label {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.57rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--muted);
+}
+.res-url {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.84rem;color:var(--c);font-weight:500;
+  word-break:break-all;text-decoration:none;
+}
+.res-url:hover { text-decoration:underline; }
+.res-error {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.75rem;color:#dc2626;line-height:1.5;
+}
+.res-actions { display:flex;gap:.4rem;flex-wrap:wrap; }
+
+.res-btn {
+  font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:.28rem .65rem;border-radius:6px;cursor:none;
+  border:1.5px solid var(--cm);background:var(--white);
+  color:var(--c);transition:all .18s;
+}
+.res-btn:hover { background:var(--cl); }
+.res-btn.copied { background:var(--cl);border-color:var(--c); }
+
+/* bit.ly unconfigured notice */
+.uncfg-note {
+  font-family:'JetBrains Mono',monospace;font-size:.7rem;
+  color:#ea580c;line-height:1.6;
+  background:#fff7ed;border:1.5px solid rgba(234,88,12,0.2);
+  border-radius:9px;padding:.65rem .9rem;
+}
+.uncfg-note a { color:#ea580c;cursor:none; }
+
+/* ── Settings modal ── */
+.modal-overlay {
+  position:fixed;inset:0;z-index:100;
+  background:rgba(26,23,48,0.5);backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:var(--white);border-radius:20px;
+  border:1.5px solid var(--border);
+  width:100%;max-width:540px;
+  box-shadow:0 20px 60px rgba(26,23,48,0.2);
+  animation:mopen .25s cubic-bezier(.34,1.56,.64,1) both;
+  overflow:hidden;
+}
+@keyframes mopen { from{opacity:0;transform:scale(.92)translateY(10px)} to{opacity:1;transform:scale(1)translateY(0)} }
+.modal-stripe { height:3px;background:linear-gradient(90deg,var(--b1-c),var(--b2-c)); }
+.modal-head {
+  padding:1.3rem 1.6rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.modal-title { font-size:1rem;font-weight:800; }
+.modal-close {
+  width:28px;height:28px;border-radius:8px;border:1.5px solid var(--border);
+  background:var(--bg);cursor:none;display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;color:var(--muted);transition:all .2s;
+}
+.modal-close:hover { background:var(--ink);color:#fff;border-color:var(--ink); }
+.modal-body { padding:1.3rem 1.6rem;display:flex;flex-direction:column;gap:1.2rem; }
+.modal-hint {
+  font-family:'JetBrains Mono',monospace;font-size:.65rem;
+  color:var(--muted);line-height:1.7;
+  padding:.6rem .85rem;background:var(--bg);
+  border-radius:9px;border:1px solid var(--border);
+}
+.acct-blk {
+  border-radius:14px;padding:1.1rem 1.2rem;
+  border:1.5px solid;display:flex;flex-direction:column;gap:.75rem;
+}
+.acct-blk.b1 { border-color:rgba(37,99,235,0.2);background:rgba(37,99,235,0.02); }
+.acct-blk.b2 { border-color:rgba(219,39,119,0.2);background:rgba(219,39,119,0.02); }
+.acct-title {
+  font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  display:flex;align-items:center;gap:.45rem;
+}
+.acct-dot { width:7px;height:7px;border-radius:50%; }
+.f-row { display:flex;flex-direction:column;gap:.28rem; }
+.f-lbl {
+  font-family:'JetBrains Mono',monospace;font-size:.58rem;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+}
+.f-inp {
+  background:var(--bg);border:1.5px solid var(--border);
+  border-radius:8px;padding:.6rem .85rem;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  color:var(--ink);outline:none;width:100%;
+  transition:border-color .2s,box-shadow .2s;
+}
+.f-inp::placeholder { color:var(--muted);opacity:.6; }
+.f-inp:focus { border-color:rgba(37,99,235,0.4);box-shadow:0 0 0 3px rgba(37,99,235,0.08); }
+.b2 .f-inp:focus { border-color:rgba(219,39,119,0.4);box-shadow:0 0 0 3px rgba(219,39,119,0.08); }
+.f-hint { font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted);opacity:.75; }
+.modal-foot {
+  padding:.9rem 1.6rem 1.4rem;
+  display:flex;gap:.6rem;justify-content:flex-end;
+  border-top:1px solid var(--border);
+}
+.btn-modal-save {
+  background:linear-gradient(135deg,var(--b1-c),var(--b2-c));
+  color:#fff;border:none;border-radius:9px;
+  padding:.65rem 1.5rem;
+  font-size:.8rem;font-weight:800;letter-spacing:.04em;cursor:none;
+  box-shadow:0 4px 14px rgba(37,99,235,0.25);
+  transition:transform .2s,box-shadow .2s;
+}
+.btn-modal-save:hover { transform:translateY(-2px);box-shadow:0 8px 22px rgba(37,99,235,0.35); }
+.btn-modal-cancel {
+  background:var(--bg);border:1.5px solid var(--border);color:var(--muted);
+  border-radius:9px;padding:.65rem 1.2rem;
+  font-size:.8rem;font-weight:700;cursor:none;transition:border-color .2s;
+}
+.btn-modal-cancel:hover { border-color:rgba(80,70,140,0.25); }
+
+/* toast */
+.toast {
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%)translateY(8px);
+  background:var(--ink);color:#fff;border-radius:10px;
+  padding:.65rem 1.4rem;font-size:.78rem;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:200;
+  white-space:nowrap;
+}
+.toast.show { opacity:1;transform:translateX(-50%)translateY(0); }
+
+/* footer */
+footer {
+  border-top:1.5px solid var(--border);padding:2rem 0;
+  text-align:center;display:flex;flex-direction:column;
+  align-items:center;gap:.5rem;margin-top:2.5rem;
+}
+.footer-brand {
+  font-size:.9rem;font-weight:800;letter-spacing:.1em;
+  background:linear-gradient(120deg,var(--j-c),var(--b1-c));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.footer-by {
+  font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);
+}
+.footer-by a { color:var(--j-c);text-decoration:none;cursor:none; }
+.footer-by a:hover { color:var(--ink); }
+.footer-link { font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);opacity:.55; }
+.footer-link a { color:var(--b1-c);text-decoration:none;cursor:none; }
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- ── Settings Modal ── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-stripe"></div>
+    <div class="modal-head">
+      <div class="modal-title">⚙️ Bit.ly Account Settings</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-hint">
+        Tokens are stored in your browser only — never sent to this server.<br>
+        Get your token at <span style="color:var(--b1-c)">app.bitly.com → Account Settings → API</span>.
+      </div>
+
+      <div class="acct-blk b1">
+        <div class="acct-title" style="color:var(--b1-c)">
+          <span class="acct-dot" style="background:var(--b1-c)"></span>
+          Bit.ly Account #1
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Label / Nickname</div>
+          <input class="f-inp" id="b1-label" type="text" placeholder="e.g. Personal Bit.ly">
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">API Access Token</div>
+          <input class="f-inp" id="b1-token" type="password" autocomplete="off" placeholder="paste your token here">
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Custom Domain (optional)</div>
+          <input class="f-inp" id="b1-domain" type="text" placeholder="go.yourdomain.com or leave blank for bit.ly">
+          <div class="f-hint">Must be configured in your Bit.ly dashboard first.</div>
+        </div>
+      </div>
+
+      <div class="acct-blk b2">
+        <div class="acct-title" style="color:var(--b2-c)">
+          <span class="acct-dot" style="background:var(--b2-c)"></span>
+          Bit.ly Account #2
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Label / Nickname</div>
+          <input class="f-inp" id="b2-label" type="text" placeholder="e.g. Work Bit.ly">
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">API Access Token</div>
+          <input class="f-inp" id="b2-token" type="password" autocomplete="off" placeholder="paste your token here">
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Custom Domain (optional)</div>
+          <input class="f-inp" id="b2-domain" type="text" placeholder="go.otherdomain.com or leave blank for bit.ly">
+          <div class="f-hint">Must be configured in your Bit.ly dashboard first.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-modal-save" onclick="saveSettings()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="page">
+
+  <header>
+    <div>
+      <div class="hd-eyebrow">Meson Systematics · URL Tools</div>
+      <h1 class="hd-title"><em>Universal</em> Link Shortener</h1>
+      <p class="hd-sub">Five independent services — use each one separately</p>
+    </div>
+    <button class="gear-btn" onclick="openModal()">⚙️ Bit.ly Settings</button>
+  </header>
+
+  <!-- Row 1: YOURLS × 3 -->
+  <div class="row-label">YOURLS · Self-hosted</div>
+  <div class="grid-3">
+
+    <!-- j.meson.kr -->
+    <div class="svc-card">
+      <div class="card-stripe" style="background:var(--j-c)"></div>
+      <div class="card-head">
+        <div class="card-icon-wrap" style="background:var(--j-l)">🔗</div>
+        <div class="card-head-text">
+          <div class="card-name" style="color:var(--j-c)">j.meson.kr</div>
+          <div class="card-tag">YOURLS · self-hosted</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="inp-wrap">
+          <div class="inp-lbl">Long URL</div>
+          <input class="card-input" id="j-url" type="url"
+            placeholder="https://example.com/…"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--j-c);--cm:var(--j-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('j')">
+        </div>
+        <div class="inp-wrap">
+          <div class="inp-lbl">Custom keyword <span style="opacity:.5">(optional)</span></div>
+          <input class="card-input" id="j-kw" type="text"
+            placeholder="my-keyword"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--j-c);--cm:var(--j-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('j')">
+        </div>
+        <button class="card-btn" id="j-btn"
+          style="--c:var(--j-c);--cg:var(--j-g)"
+          onclick="doYOURLs('j')">Shorten ↗</button>
+        <div class="card-result" id="j-result"
+          style="--c:var(--j-c);--cl:var(--j-l);--cm:var(--j-m)">
+          <div class="res-label" id="j-res-lbl">Short URL</div>
+          <a class="res-url" id="j-res-url" href="#" target="_blank" rel="noopener"></a>
+          <div class="res-error" id="j-res-err" style="display:none"></div>
+          <div class="res-actions" id="j-res-act">
+            <button class="res-btn" style="--c:var(--j-c);--cl:var(--j-l);--cm:var(--j-m)"
+              onclick="copyRes('j')">Copy</button>
+            <a class="res-btn" id="j-open" href="#" target="_blank" rel="noopener"
+              style="--c:var(--j-c);--cl:var(--j-l);--cm:var(--j-m);text-decoration:none">Open ↗</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- g.onni.me -->
+    <div class="svc-card">
+      <div class="card-stripe" style="background:var(--g-c)"></div>
+      <div class="card-head">
+        <div class="card-icon-wrap" style="background:var(--g-l)">🌿</div>
+        <div class="card-head-text">
+          <div class="card-name" style="color:var(--g-c)">g.onni.me</div>
+          <div class="card-tag">YOURLS · self-hosted</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="inp-wrap">
+          <div class="inp-lbl">Long URL</div>
+          <input class="card-input" id="g-url" type="url"
+            placeholder="https://example.com/…"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--g-c);--cm:var(--g-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('g')">
+        </div>
+        <div class="inp-wrap">
+          <div class="inp-lbl">Custom keyword <span style="opacity:.5">(optional)</span></div>
+          <input class="card-input" id="g-kw" type="text"
+            placeholder="my-keyword"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--g-c);--cm:var(--g-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('g')">
+        </div>
+        <button class="card-btn" id="g-btn"
+          style="--c:var(--g-c);--cg:var(--g-g)"
+          onclick="doYOURLs('g')">Shorten ↗</button>
+        <div class="card-result" id="g-result"
+          style="--c:var(--g-c);--cl:var(--g-l);--cm:var(--g-m)">
+          <div class="res-label" id="g-res-lbl">Short URL</div>
+          <a class="res-url" id="g-res-url" href="#" target="_blank" rel="noopener"></a>
+          <div class="res-error" id="g-res-err" style="display:none"></div>
+          <div class="res-actions" id="g-res-act">
+            <button class="res-btn" style="--c:var(--g-c);--cl:var(--g-l);--cm:var(--g-m)"
+              onclick="copyRes('g')">Copy</button>
+            <a class="res-btn" id="g-open" href="#" target="_blank" rel="noopener"
+              style="--c:var(--g-c);--cl:var(--g-l);--cm:var(--g-m);text-decoration:none">Open ↗</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- l.meson.in -->
+    <div class="svc-card">
+      <div class="card-stripe" style="background:var(--l-c)"></div>
+      <div class="card-head">
+        <div class="card-icon-wrap" style="background:var(--l-l)">⚡</div>
+        <div class="card-head-text">
+          <div class="card-name" style="color:var(--l-c)">l.meson.in</div>
+          <div class="card-tag">YOURLS · self-hosted</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="inp-wrap">
+          <div class="inp-lbl">Long URL</div>
+          <input class="card-input" id="l-url" type="url"
+            placeholder="https://example.com/…"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--l-c);--cm:var(--l-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('l')">
+        </div>
+        <div class="inp-wrap">
+          <div class="inp-lbl">Custom keyword <span style="opacity:.5">(optional)</span></div>
+          <input class="card-input" id="l-kw" type="text"
+            placeholder="my-keyword"
+            autocomplete="off" spellcheck="false"
+            style="--c:var(--l-c);--cm:var(--l-m)"
+            onkeydown="if(event.key==='Enter')doYOURLs('l')">
+        </div>
+        <button class="card-btn" id="l-btn"
+          style="--c:var(--l-c);--cg:var(--l-g)"
+          onclick="doYOURLs('l')">Shorten ↗</button>
+        <div class="card-result" id="l-result"
+          style="--c:var(--l-c);--cl:var(--l-l);--cm:var(--l-m)">
+          <div class="res-label" id="l-res-lbl">Short URL</div>
+          <a class="res-url" id="l-res-url" href="#" target="_blank" rel="noopener"></a>
+          <div class="res-error" id="l-res-err" style="display:none"></div>
+          <div class="res-actions" id="l-res-act">
+            <button class="res-btn" style="--c:var(--l-c);--cl:var(--l-l);--cm:var(--l-m)"
+              onclick="copyRes('l')">Copy</button>
+            <a class="res-btn" id="l-open" href="#" target="_blank" rel="noopener"
+              style="--c:var(--l-c);--cl:var(--l-l);--cm:var(--l-m);text-decoration:none">Open ↗</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: Bit.ly × 2 -->
+  <div class="row-label">Bit.ly · Cloud service</div>
+  <div class="grid-2">
+
+    <!-- bit.ly #1 -->
+    <div class="svc-card" id="card-b1">
+      <div class="card-stripe" style="background:var(--b1-c)"></div>
+      <div class="card-head">
+        <div class="card-icon-wrap" style="background:var(--b1-l)">🔵</div>
+        <div class="card-head-text">
+          <div class="card-name" id="b1-card-name" style="color:var(--b1-c)">Bit.ly #1</div>
+          <div class="card-tag" id="b1-card-tag">Configure domain in ⚙️ Settings</div>
+        </div>
+      </div>
+      <div class="card-body" id="b1-body">
+        <!-- filled by JS based on settings -->
+      </div>
+    </div>
+
+    <!-- bit.ly #2 -->
+    <div class="svc-card" id="card-b2">
+      <div class="card-stripe" style="background:var(--b2-c)"></div>
+      <div class="card-head">
+        <div class="card-icon-wrap" style="background:var(--b2-l)">🩷</div>
+        <div class="card-head-text">
+          <div class="card-name" id="b2-card-name" style="color:var(--b2-c)">Bit.ly #2</div>
+          <div class="card-tag" id="b2-card-tag">Configure domain in ⚙️ Settings</div>
+        </div>
+      </div>
+      <div class="card-body" id="b2-body">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-brand">MESON SYSTEMATICS</div>
+    <div class="footer-by">
+      Powered by <a href="mailto:june@meson.one">Thomas J. Park</a>
+      &nbsp;·&nbsp; <a href="mailto:june@meson.one">june@meson.one</a>
+    </div>
+    <div class="footer-link">
+      <a href="https://meson.one" target="_blank" rel="noopener">meson.one</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ─── Cursor ─── */
+const cur=document.getElementById('cursor');
+const ring=document.getElementById('cursor-ring');
+let mx=innerWidth/2,my=innerHeight/2,rx=mx,ry=my;
+document.addEventListener('mousemove',e=>{
+  mx=e.clientX;my=e.clientY;
+  cur.style.left=mx+'px';cur.style.top=my+'px';
+});
+(function lag(){rx+=(mx-rx)*.15;ry+=(my-ry)*.15;
+  ring.style.left=rx+'px';ring.style.top=ry+'px';
+  requestAnimationFrame(lag);})();
+function onInteractive(){
+  cur.style.width='18px';cur.style.height='18px';
+  ring.style.width='46px';ring.style.height='46px';
+}
+function offInteractive(){
+  cur.style.width='10px';cur.style.height='10px';
+  ring.style.width='32px';ring.style.height='32px';
+}
+document.addEventListener('mouseover',e=>{
+  if(e.target.matches('a,button,input')) onInteractive();
+  else offInteractive();
+});
+
+/* ─── Toast ─── */
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ─── YOURLS shared result renderer ─── */
+function showYOURLSResult(svc, type, payload){
+  const box  = document.getElementById(svc+'-result');
+  const lbl  = document.getElementById(svc+'-res-lbl');
+  const url  = document.getElementById(svc+'-res-url');
+  const err  = document.getElementById(svc+'-res-err');
+  const acts = document.getElementById(svc+'-res-act');
+  const open = document.getElementById(svc+'-open');
+
+  box.classList.add('visible');
+  if(type==='ok'){
+    box.classList.remove('is-error');
+    lbl.textContent='Short URL';
+    url.textContent=payload.url; url.href=payload.url; url.style.display='';
+    err.style.display='none'; acts.style.display='flex';
+    if(open) open.href=payload.url;
+  } else {
+    box.classList.add('is-error');
+    lbl.textContent='Error';
+    url.style.display='none';
+    err.textContent='⚠ '+payload.msg; err.style.display='';
+    acts.style.display='none';
+  }
+}
+
+/* ─── YOURLS call ─── */
+async function doYOURLs(svc){
+  const urlVal = document.getElementById(svc+'-url').value.trim();
+  const kwVal  = document.getElementById(svc+'-kw').value.trim();
+  const btn    = document.getElementById(svc+'-btn');
+  if(!urlVal){ showToast('Enter a URL first'); return; }
+
+  btn.disabled=true; btn.textContent='Working…';
+  const box=document.getElementById(svc+'-result');
+  box.classList.remove('visible','is-error');
+
+  try{
+    const body=new URLSearchParams({url:urlVal});
+    if(kwVal) body.append('keyword',kwVal);
+    // Worker URL — replace with your actual Cloudflare Worker URL after deployment
+    const WORKER_URL = 'https://meson-yourls-proxy.YOUR-SUBDOMAIN.workers.dev';
+    const res=await fetch(WORKER_URL+'?svc='+svc,{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:body.toString(),
+    });
+    const data=await res.json();
+    if(data.shorturl) showYOURLSResult(svc,'ok',{url:data.shorturl});
+    else throw new Error(data.message||data.error||'Unknown YOURLS error');
+  }catch(e){
+    showYOURLSResult(svc,'error',{msg:e.message||'Network error'});
+  }finally{
+    btn.disabled=false; btn.textContent='Shorten ↗';
+  }
+}
+
+function copyRes(svc){
+  const url=document.getElementById(svc+'-res-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btns=document.querySelectorAll(`#${svc}-res-act .res-btn`);
+    const copyBtn=btns[0];
+    const orig=copyBtn.textContent;
+    copyBtn.textContent='Copied ✓';copyBtn.classList.add('copied');
+    setTimeout(()=>{copyBtn.textContent=orig;copyBtn.classList.remove('copied');},2000);
+  });
+}
+
+/* ─── Settings modal ─── */
+function loadModal(){
+  const d=JSON.parse(localStorage.getItem('meson_bitly')||'{}');
+  document.getElementById('b1-label').value  = d.b1?.label  ||'';
+  document.getElementById('b1-token').value  = d.b1?.token  ||'';
+  document.getElementById('b1-domain').value = d.b1?.domain ||'';
+  document.getElementById('b2-label').value  = d.b2?.label  ||'';
+  document.getElementById('b2-token').value  = d.b2?.token  ||'';
+  document.getElementById('b2-domain').value = d.b2?.domain ||'';
+}
+function openModal(){ loadModal(); document.getElementById('modal').classList.add('open'); }
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+
+function saveSettings(){
+  const d={
+    b1:{label:document.getElementById('b1-label').value.trim(),
+        token:document.getElementById('b1-token').value.trim(),
+        domain:document.getElementById('b1-domain').value.trim()},
+    b2:{label:document.getElementById('b2-label').value.trim(),
+        token:document.getElementById('b2-token').value.trim(),
+        domain:document.getElementById('b2-domain').value.trim()},
+  };
+  localStorage.setItem('meson_bitly',JSON.stringify(d));
+  closeModal();
+  renderBitlyCards();
+  showToast('Bit.ly settings saved ✓');
+}
+
+/* ─── Bit.ly cards (dynamic) ─── */
+function bitlyCardHTML(id, cfg, color, colorL, colorM, colorG){
+  const hasToken = !!cfg?.token;
+  const nameLabel = cfg?.label || `Bit.ly ${id==='b1'?'#1':'#2'}`;
+  const domainLabel= cfg?.domain || 'bit.ly';
+
+  // update header
+  document.getElementById(id+'-card-name').textContent = nameLabel;
+  document.getElementById(id+'-card-tag').textContent  =
+    hasToken ? domainLabel+' · Bit.ly API' : 'Configure in ⚙️ Settings';
+
+  if(!hasToken){
+    return `<div class="uncfg-note">
+      ⚠ No API token configured.<br>
+      Click <a onclick="openModal()" style="cursor:none;text-decoration:underline">⚙️ Bit.ly Settings</a> above to add your token.
+    </div>`;
+  }
+
+  return `
+    <div class="inp-wrap">
+      <div class="inp-lbl">Long URL</div>
+      <input class="card-input" id="${id}-url" type="url"
+        placeholder="https://example.com/…"
+        autocomplete="off" spellcheck="false"
+        style="--c:${color};--cm:${colorM}"
+        onkeydown="if(event.key==='Enter')doBitly('${id}')">
+    </div>
+    <button class="card-btn" id="${id}-btn"
+      style="--c:${color};--cg:${colorG}"
+      onclick="doBitly('${id}')">Shorten ↗</button>
+    <div class="card-result" id="${id}-result"
+      style="--c:${color};--cl:${colorL};--cm:${colorM}">
+      <div class="res-label" id="${id}-res-lbl">Short URL</div>
+      <a class="res-url" id="${id}-res-url" href="#" target="_blank" rel="noopener"></a>
+      <div class="res-error" id="${id}-res-err" style="display:none"></div>
+      <div class="res-actions" id="${id}-res-act">
+        <button class="res-btn"
+          style="--c:${color};--cl:${colorL};--cm:${colorM}"
+          onclick="copyBitly('${id}')">Copy</button>
+        <a class="res-btn" id="${id}-open" href="#" target="_blank" rel="noopener"
+          style="--c:${color};--cl:${colorL};--cm:${colorM};text-decoration:none">Open ↗</a>
+      </div>
+    </div>`;
+}
+
+function renderBitlyCards(){
+  const d=JSON.parse(localStorage.getItem('meson_bitly')||'{}');
+  document.getElementById('b1-body').innerHTML=
+    bitlyCardHTML('b1',d.b1,'var(--b1-c)','var(--b1-l)','var(--b1-m)','var(--b1-g)');
+  document.getElementById('b2-body').innerHTML=
+    bitlyCardHTML('b2',d.b2,'var(--b2-c)','var(--b2-l)','var(--b2-m)','var(--b2-g)');
+  // re-attach cursor listeners to new inputs
+  document.querySelectorAll('.card-input,button,a').forEach(el=>{
+    el.addEventListener('mouseenter',onInteractive);
+    el.addEventListener('mouseleave',offInteractive);
+  });
+}
+
+/* ─── Bit.ly call ─── */
+async function doBitly(id){
+  const urlEl=document.getElementById(id+'-url');
+  const btn  =document.getElementById(id+'-btn');
+  if(!urlEl) return;
+  const urlVal=urlEl.value.trim();
+  if(!urlVal){ showToast('Enter a URL first'); return; }
+
+  const cfg=JSON.parse(localStorage.getItem('meson_bitly')||'{}')[id];
+  if(!cfg?.token){ showToast('No token configured — open Settings'); return; }
+
+  btn.disabled=true; btn.textContent='Working…';
+  const box=document.getElementById(id+'-result');
+  if(box){ box.classList.remove('visible','is-error'); }
+
+  try{
+    const body={long_url:urlVal};
+    if(cfg.domain) body.domain=cfg.domain;
+    const res=await fetch('https://api-ssl.bitly.com/v4/shorten',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+cfg.token,'Content-Type':'application/json'},
+      body:JSON.stringify(body),
+    });
+    const data=await res.json();
+    if(data.link){
+      showBitlyResult(id,'ok',{url:data.link});
+    } else {
+      throw new Error(data.message||data.description||JSON.stringify(data).slice(0,120));
+    }
+  }catch(e){
+    showBitlyResult(id,'error',{msg:e.message||'Network error'});
+  }finally{
+    btn.disabled=false; btn.textContent='Shorten ↗';
+  }
+}
+
+function showBitlyResult(id, type, payload){
+  const box  = document.getElementById(id+'-result');
+  const lbl  = document.getElementById(id+'-res-lbl');
+  const url  = document.getElementById(id+'-res-url');
+  const err  = document.getElementById(id+'-res-err');
+  const acts = document.getElementById(id+'-res-act');
+  const open = document.getElementById(id+'-open');
+  if(!box) return;
+
+  box.classList.add('visible');
+  if(type==='ok'){
+    box.classList.remove('is-error');
+    lbl.textContent='Short URL';
+    url.textContent=payload.url; url.href=payload.url; url.style.display='';
+    err.style.display='none'; acts.style.display='flex';
+    if(open) open.href=payload.url;
+  } else {
+    box.classList.add('is-error');
+    lbl.textContent='Error';
+    url.style.display='none';
+    err.textContent='⚠ '+payload.msg; err.style.display='';
+    acts.style.display='none';
+  }
+}
+
+function copyBitly(id){
+  const url=document.getElementById(id+'-res-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.querySelector(`#${id}-res-act .res-btn`);
+    const orig=btn.textContent;
+    btn.textContent='Copied ✓';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent=orig;btn.classList.remove('copied');},2000);
+  });
+}
+
+/* ─── Init ─── */
+renderBitlyCards();
+</script>
+</body>
+</html>
