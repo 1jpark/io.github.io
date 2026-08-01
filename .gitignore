@@ -1,0 +1,12 @@
+# No PHP secrets needed — tokens live in Cloudflare Worker Secrets dashboard
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+*~
+
+# Wrangler local dev
+.wrangler/
+.dev.vars          # local dev secrets — never commit this
